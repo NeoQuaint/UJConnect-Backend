@@ -11,7 +11,7 @@ const pool = new Pool({
 router.get('/:id', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, full_name, preferred_name, student_number, email, department, course, bio, skills, year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom, created_at FROM users WHERE id = $1',
+      'SELECT id, full_name, preferred_name, student_number, email, department, course, bio, skills, year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom, dark_mode, tiktok, instagram, facebook, youtube, linkedin, created_at FROM users WHERE id = $1',
       [req.params.id]
     );
     if (result.rows.length === 0) {
@@ -26,13 +26,13 @@ router.get('/:id', async (req, res) => {
 // Update profile
 router.put('/:id', async (req, res) => {
   try {
-    const { full_name, preferred_name, department, course, bio, skills, year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom } = req.body;
+    const { full_name, preferred_name, department, course, bio, skills, year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom, dark_mode, tiktok, instagram, facebook, youtube, linkedin } = req.body;
     const result = await pool.query(
       `UPDATE users 
-       SET full_name = $1, preferred_name = $2, department = $3, course = $4, bio = $5, skills = $6, year = $7, cover_photo = $8, profile_pic = $9, cover_position_x = $10, cover_position_y = $11, cover_zoom = $12, profile_position_x = $13, profile_position_y = $14, profile_zoom = $15, updated_at = NOW()
-       WHERE id = $16
-       RETURNING id, full_name, preferred_name, student_number, email, department, course, bio, skills, year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom, created_at, updated_at`,
-      [full_name, preferred_name, department, course, bio, skills || [], year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom, req.params.id]
+       SET full_name = $1, preferred_name = $2, department = $3, course = $4, bio = $5, skills = $6, year = $7, cover_photo = $8, profile_pic = $9, cover_position_x = $10, cover_position_y = $11, cover_zoom = $12, profile_position_x = $13, profile_position_y = $14, profile_zoom = $15, dark_mode = $16, tiktok = $17, instagram = $18, facebook = $19, youtube = $20, linkedin = $21, updated_at = NOW()
+       WHERE id = $22
+       RETURNING id, full_name, preferred_name, student_number, email, department, course, bio, skills, year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom, dark_mode, tiktok, instagram, facebook, youtube, linkedin, created_at, updated_at`,
+      [full_name, preferred_name, department, course, bio, skills || [], year, cover_photo, profile_pic, cover_position_x, cover_position_y, cover_zoom, profile_position_x, profile_position_y, profile_zoom, dark_mode, tiktok, instagram, facebook, youtube, linkedin, req.params.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
