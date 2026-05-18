@@ -31,6 +31,9 @@ const initDB = async () => {
         course VARCHAR(255),
         password VARCHAR(255) NOT NULL,
         bio TEXT,
+        skills TEXT[],
+        year VARCHAR(10),
+        cover_photo TEXT,
         profile_pic TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -106,10 +109,12 @@ app.get('/api/health', (req, res) => {
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
+const uploadRoutes = require('./routes/upload');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
