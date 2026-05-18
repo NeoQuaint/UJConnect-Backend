@@ -47,4 +47,41 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Delete post
+router.delete('/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM posts WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete post error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Like post
+router.post('/:id/like', async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    // Check if already liked
+    const existing = await pool.query(
+      'SELECT id FROM likes WHERE user_id = $1 AND post_id = $2',
+      [user_id, req.params.id]
+    );
+    if (existing.rows.length > 0) {
+      // Unlike
+      await pool.query('DELETE FROM likes WHERE user_id = $1 AND post_id = $2', [user_id, req.params.id]);
+      await pool.query('UPDATE posts SET likes_count = likes_count - 1 WHERE id = $1', [req.params.id]);
+      res.json({ liked: false });
+    } else {
+      // Like
+      await pool.query('INSERT INTO likes (user_id, post_id) VALUES ($1, $2)', [user_id, req.params.id]);
+      await pool.query('UPDATE posts SET likes_count = likes_count + 1 WHERE id = $1', [req.params.id]);
+      res.json({ liked: true });
+    }
+  } catch (err) {
+    console.error('Like error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
