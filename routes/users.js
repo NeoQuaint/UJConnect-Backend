@@ -11,7 +11,7 @@ const pool = new Pool({
 router.get('/:id', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, full_name, preferred_name, student_number, email, department, course, bio, skills, profile_pic, created_at FROM users WHERE id = $1',
+      'SELECT id, full_name, preferred_name, student_number, email, department, course, bio, skills, year, cover_photo, profile_pic, created_at FROM users WHERE id = $1',
       [req.params.id]
     );
     if (result.rows.length === 0) {
@@ -26,13 +26,13 @@ router.get('/:id', async (req, res) => {
 // Update profile
 router.put('/:id', async (req, res) => {
   try {
-    const { full_name, preferred_name, department, course, bio, skills } = req.body;
+    const { full_name, preferred_name, department, course, bio, skills, year, cover_photo } = req.body;
     const result = await pool.query(
       `UPDATE users 
-       SET full_name = $1, preferred_name = $2, department = $3, course = $4, bio = $5, skills = $6, updated_at = NOW()
-       WHERE id = $7
-       RETURNING id, full_name, preferred_name, student_number, email, department, course, bio, skills, profile_pic, created_at, updated_at`,
-      [full_name, preferred_name, department, course, bio, skills || [], req.params.id]
+       SET full_name = $1, preferred_name = $2, department = $3, course = $4, bio = $5, skills = $6, year = $7, cover_photo = $8, updated_at = NOW()
+       WHERE id = $9
+       RETURNING id, full_name, preferred_name, student_number, email, department, course, bio, skills, year, cover_photo, profile_pic, created_at, updated_at`,
+      [full_name, preferred_name, department, course, bio, skills || [], year, cover_photo, req.params.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -52,7 +52,7 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: 'Search query required' });
     }
     const result = await pool.query(
-      `SELECT id, full_name, preferred_name, department, course, profile_pic 
+      `SELECT id, full_name, preferred_name, department, course, year, profile_pic 
        FROM users 
        WHERE full_name ILIKE $1 OR preferred_name ILIKE $1 OR department ILIKE $1
        LIMIT 20`,
