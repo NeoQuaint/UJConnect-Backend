@@ -60,6 +60,14 @@ const initDB = async () => {
         UNIQUE(user_id, post_id)
       );
 
+      CREATE TABLE IF NOT EXISTS comments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS follows (
         id SERIAL PRIMARY KEY,
         follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -110,11 +118,13 @@ const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
 const uploadRoutes = require('./routes/upload');
+const commentsRoutes = require('./routes/comments');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/comments', commentsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
