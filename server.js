@@ -11,7 +11,14 @@ app.use(express.json());
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected pool error:', err.message);
 });
 
 pool.connect()
@@ -68,6 +75,14 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS stories (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        media_url TEXT,
+        media_type VARCHAR(50) DEFAULT 'image',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS follows (
         id SERIAL PRIMARY KEY,
         follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -119,12 +134,14 @@ const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
 const uploadRoutes = require('./routes/upload');
 const commentsRoutes = require('./routes/comments');
+const storiesRoutes = require('./routes/stories');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/comments', commentsRoutes);
+app.use('/api/stories', storiesRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
