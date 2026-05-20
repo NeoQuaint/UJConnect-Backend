@@ -44,4 +44,19 @@ router.post('/:postId', async (req, res) => {
   }
 });
 
+// Delete comment
+router.delete('/:id', async (req, res) => {
+  try {
+    const comment = await pool.query('SELECT post_id FROM comments WHERE id = $1', [req.params.id]);
+    if (comment.rows.length > 0) {
+      await pool.query('DELETE FROM comments WHERE id = $1', [req.params.id]);
+      await pool.query('UPDATE posts SET comments_count = GREATEST(comments_count - 1, 0) WHERE id = $1', [comment.rows[0].post_id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete comment error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
