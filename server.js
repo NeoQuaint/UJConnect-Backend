@@ -83,6 +83,21 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS highlights (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        cover_media TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS highlight_stories (
+        id SERIAL PRIMARY KEY,
+        highlight_id INTEGER REFERENCES highlights(id) ON DELETE CASCADE,
+        story_id INTEGER REFERENCES stories(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS follows (
         id SERIAL PRIMARY KEY,
         follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -135,6 +150,7 @@ const usersRoutes = require('./routes/users');
 const uploadRoutes = require('./routes/upload');
 const commentsRoutes = require('./routes/comments');
 const storiesRoutes = require('./routes/stories');
+const highlightsRoutes = require('./routes/highlights');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
@@ -142,6 +158,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/stories', storiesRoutes);
+app.use('/api/highlights', highlightsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
