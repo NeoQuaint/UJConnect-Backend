@@ -149,14 +149,17 @@ app.get('/api/health', (req, res) => {
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
+const badgesRoutes = require('./routes/badges');
 const uploadRoutes = require('./routes/upload');
 const commentsRoutes = require('./routes/comments');
 const storiesRoutes = require('./routes/stories');
 const highlightsRoutes = require('./routes/highlights');
 
+
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/badges', badgesRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/stories', storiesRoutes);
