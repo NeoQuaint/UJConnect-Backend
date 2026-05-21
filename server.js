@@ -91,10 +91,12 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS highlight_stories (
+      CREATE TABLE IF NOT EXISTS highlight_items (
         id SERIAL PRIMARY KEY,
         highlight_id INTEGER REFERENCES highlights(id) ON DELETE CASCADE,
-        story_id INTEGER REFERENCES stories(id) ON DELETE CASCADE,
+        media_url TEXT,
+        media_type VARCHAR(50) DEFAULT 'image',
+        source_story_id INTEGER REFERENCES stories(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT NOW()
       );
 
