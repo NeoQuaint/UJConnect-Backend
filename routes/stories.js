@@ -7,17 +7,24 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Get active stories (last 24 hours)
+// Get stories (all active in last 24 hours, or by user)
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT s.*, u.full_name, u.preferred_name, u.profile_pic
-       FROM stories s
-       JOIN users u ON s.user_id = u.id
-       WHERE s.created_at > NOW() - INTERVAL '24 hours'
-       ORDER BY s.created_at DESC
-       LIMIT 50`
-    );
+    const { user_id } = req.query;
+    let query = `
+      SELECT s.*, u.full_name, u.preferred_name, u.profile_pic, u.department
+      FROM stories s
+      JOIN users u ON s.user_id = u.id
+    `;
+    const params = [];
+    if (user_id) {
+      query += ' WHERE s.user_id = $1';
+      params.push(user_id);
+    } else {
+      query += " WHERE s.created_at > NOW() - INTERVAL '24 hours'";
+    }
+    query += ' ORDER BY s.created_at DESC LIMIT 50';
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('Get stories error:', err);
