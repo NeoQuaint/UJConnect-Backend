@@ -112,13 +112,41 @@ router.get('/verify', async (req, res) => {
       return res.status(400).json({ error: 'No verification token provided' });
     }
 
+    // Check if token exists
+    const checkResult = await pool.query(
+      'SELECT id, verified FROM users WHERE verification_token = $1',
+      [token]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid verification link. Please request a new one.' });
+    }
+
+    const userCheck = checkResult.rows[0];
+
+    if (userCheck.verified) {
+      // Already verified - return the user with a fresh auth token
+      const userResult = await pool.query(
+        'SELECT id, full_name, preferred_name, student_number, email, department, course, bio, profile_pic, verified FROM users WHERE id = $1',
+        [userCheck.id]
+      );
+      const user = userResult.rows[0];
+      const authToken = jwt.sign(
+        { id: user.id, email: user.email },
+        process.env.JWT_SECRET || 'dev-secret',
+        { expiresIn: '30d' }
+      );
+      return res.json({ message: 'Email already verified!', user, token: authToken });
+    }
+
+    // Verify the user - don't delete the token so it can be clicked multiple times
     const result = await pool.query(
-      'UPDATE users SET verified = TRUE, verification_token = NULL WHERE verification_token = $1 AND verified = FALSE RETURNING id, full_name, preferred_name, student_number, email, department, course, bio, profile_pic, verified',
+      'UPDATE users SET verified = TRUE WHERE verification_token = $1 AND verified = FALSE RETURNING id, full_name, preferred_name, student_number, email, department, course, bio, profile_pic, verified',
       [token]
     );
 
     if (result.rows.length === 0) {
-      return res.status(400).json({ error: 'Invalid or expired verification link. You may already be verified.' });
+      return res.status(400).json({ error: 'Verification failed. Please try again.' });
     }
 
     const user = result.rows[0];
@@ -152,7 +180,7 @@ router.post('/resend-verification', async (req, res) => {
     const user = result.rows[0];
 
     if (user.verified) {
-      return res.status(400).json({ error: 'Account is already verified' });
+      return res.json({ message: 'Account is already verified. You can log in now.' });
     }
 
     const verificationToken = crypto.randomBytes(32).toString('hex');
