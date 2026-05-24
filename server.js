@@ -42,6 +42,8 @@ const initDB = async () => {
         year VARCHAR(10),
         cover_photo TEXT,
         profile_pic TEXT,
+        verification_token VARCHAR(255),
+        verified BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
@@ -100,6 +102,24 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS badges (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS projects (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        tags TEXT[],
+        link TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS follows (
         id SERIAL PRIMARY KEY,
         follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -149,25 +169,22 @@ app.get('/api/health', (req, res) => {
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
-const badgesRoutes = require('./routes/badges');
 const uploadRoutes = require('./routes/upload');
 const commentsRoutes = require('./routes/comments');
 const storiesRoutes = require('./routes/stories');
-const projectsRoutes = require('./routes/projects');
 const highlightsRoutes = require('./routes/highlights');
-
-
+const badgesRoutes = require('./routes/badges');
+const projectsRoutes = require('./routes/projects');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/users', usersRoutes);
-app.use('/api/badges', badgesRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/projects', projectsRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/stories', storiesRoutes);
 app.use('/api/highlights', highlightsRoutes);
-
+app.use('/api/badges', badgesRoutes);
+app.use('/api/projects', projectsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
