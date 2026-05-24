@@ -64,11 +64,18 @@ router.post('/register', async (req, res) => {
       { expiresIn: '30d' }
     );
 
-    // Send verification email
+    // Send response FIRST, then send email in background
+    res.status(201).json({
+      message: 'Account created. Check your email to verify.',
+      user: user,
+      token: authToken
+    });
+
+    // Send verification email AFTER response
     const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${verificationToken}`;
 
     try {
-      await transporter.sendMail({
+      const info = await transporter.sendMail({
         from: `"UJ Connect" <${process.env.EMAIL_USER}>`,
         to: email,
         subject: 'Verify your UJ Connect account',
@@ -87,16 +94,10 @@ router.post('/register', async (req, res) => {
           </div>
         `
       });
-      console.log('Verification email sent to:', email);
+      console.log('Verification email delivered:', info.messageId);
     } catch (emailErr) {
-      console.error('Email send error:', emailErr);
+      console.error('Email send error:', emailErr.message);
     }
-
-    res.status(201).json({
-      message: 'Account created. Check your email to verify.',
-      user: user,
-      token: authToken
-    });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -186,24 +187,31 @@ router.post('/resend-verification', async (req, res) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     await pool.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, user.id]);
 
+    // Send response first
+    res.json({ message: 'Verification email resent. Check your inbox.' });
+
+    // Send email after response
     const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${verificationToken}`;
 
-    await transporter.sendMail({
-      from: `"UJ Connect" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Verify your UJ Connect account',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
-          <h2 style="color: #1a1a1a;">Verify your email</h2>
-          <p>Click below to verify your UJ Connect account:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${verificationLink}" style="display: inline-block; padding: 14px 36px; background: #FF6B00; color: white; text-decoration: none; border-radius: 50px; font-weight: 700;">Verify My Account</a>
+    try {
+      const info = await transporter.sendMail({
+        from: `"UJ Connect" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: 'Verify your UJ Connect account',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+            <h2 style="color: #1a1a1a;">Verify your email</h2>
+            <p>Click below to verify your UJ Connect account:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${verificationLink}" style="display: inline-block; padding: 14px 36px; background: #FF6B00; color: white; text-decoration: none; border-radius: 50px; font-weight: 700;">Verify My Account</a>
+            </div>
           </div>
-        </div>
-      `
-    });
-
-    res.json({ message: 'Verification email resent. Check your inbox.' });
+        `
+      });
+      console.log('Resend verification delivered:', info.messageId);
+    } catch (emailErr) {
+      console.error('Resend email error:', emailErr.message);
+    }
   } catch (err) {
     console.error('Resend error:', err);
     res.status(500).json({ error: 'Server error' });
