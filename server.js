@@ -1,10 +1,20 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: ['http://localhost:5173', 'https://uj-connect.com', 'https://www.uj-connect.com'],
+    methods: ['GET', 'POST']
+  }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -120,14 +130,6 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS follows (
-        id SERIAL PRIMARY KEY,
-        follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        following_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(follower_id, following_id)
-      );
-
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
         sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -135,6 +137,14 @@ const initDB = async () => {
         content TEXT NOT NULL,
         read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS follows (
+        id SERIAL PRIMARY KEY,
+        follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        following_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(follower_id, following_id)
       );
 
       CREATE TABLE IF NOT EXISTS communities (
@@ -186,6 +196,78 @@ app.use('/api/highlights', highlightsRoutes);
 app.use('/api/badges', badgesRoutes);
 app.use('/api/projects', projectsRoutes);
 
-app.listen(PORT, () => {
+// Add messages REST endpoint for fetching chat history
+app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT m.*, u.full_name, u.preferred_name, u.profile_pic 
+       FROM messages m 
+       JOIN users u ON m.sender_id = u.id 
+       WHERE (m.sender_id = $1 AND m.receiver_id = $2) 
+          OR (m.sender_id = $2 AND m.receiver_id = $1) 
+       ORDER BY m.created_at ASC 
+       LIMIT 100`,
+      [req.params.userId, req.params.otherUserId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Online users tracking
+const onlineUsers = new Map();
+
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  socket.on('user_online', (userId) => {
+    onlineUsers.set(String(userId), socket.id);
+    socket.userId = String(userId);
+    io.emit('online_users', Array.from(onlineUsers.keys()));
+  });
+
+  socket.on('send_message', async (data) => {
+    const { sender_id, receiver_id, content } = data;
+    try {
+      const result = await pool.query(
+        'INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *',
+        [sender_id, receiver_id, content]
+      );
+      const message = result.rows[0];
+      const receiverSocketId = onlineUsers.get(String(receiver_id));
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('new_message', message);
+      }
+      socket.emit('message_sent', message);
+    } catch (err) {
+      console.error('Message save error:', err);
+    }
+  });
+
+  socket.on('typing', (data) => {
+    const receiverSocketId = onlineUsers.get(String(data.receiver_id));
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit('user_typing', { sender_id: data.sender_id });
+    }
+  });
+
+  socket.on('stop_typing', (data) => {
+    const receiverSocketId = onlineUsers.get(String(data.receiver_id));
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit('user_stop_typing', { sender_id: data.sender_id });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    if (socket.userId) {
+      onlineUsers.delete(socket.userId);
+      io.emit('online_users', Array.from(onlineUsers.keys()));
+    }
+    console.log('User disconnected:', socket.id);
+  });
+});
+
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
