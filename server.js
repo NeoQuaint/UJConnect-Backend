@@ -182,6 +182,7 @@ const usersRoutes = require('./routes/users');
 const uploadRoutes = require('./routes/upload');
 const commentsRoutes = require('./routes/comments');
 const storiesRoutes = require('./routes/stories');
+const searchRoutes = require('./routes/search');
 const highlightsRoutes = require('./routes/highlights');
 const badgesRoutes = require('./routes/badges');
 const projectsRoutes = require('./routes/projects');
@@ -194,6 +195,7 @@ app.use('/api/comments', commentsRoutes);
 app.use('/api/stories', storiesRoutes);
 app.use('/api/highlights', highlightsRoutes);
 app.use('/api/badges', badgesRoutes);
+app.use('/api/search', searchRoutes);
 app.use('/api/projects', projectsRoutes);
 
 // Add messages REST endpoint for fetching chat history
