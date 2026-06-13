@@ -7,20 +7,34 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Get posts (all or by user)
+// Get posts (all or by user, with scope filtering)
 router.get('/', async (req, res) => {
   try {
-    const { user_id } = req.query;
+    const { user_id, type, scope } = req.query;
     let query = `
       SELECT p.*, u.full_name, u.preferred_name, u.department, u.profile_pic
       FROM posts p
       JOIN users u ON p.user_id = u.id
+      WHERE 1=1
     `;
     const params = [];
+
+    // Filter by user
     if (user_id) {
-      query += ' WHERE p.user_id = $1';
       params.push(user_id);
+      query += ` AND p.user_id = $${params.length}`;
     }
+
+    // Filter by scope
+    if (scope === 'profile') {
+      // Only show profile-scoped posts
+      query += ` AND (p.post_scope = 'profile' OR p.post_scope IS NULL)`;
+    } else if (type === 'feed' || scope === 'feed') {
+      // Only show feed-scoped posts
+      query += ` AND p.post_scope = 'feed'`;
+    }
+    // If no scope filter, show all posts
+
     query += ' ORDER BY p.created_at DESC LIMIT 50';
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -33,14 +47,24 @@ router.get('/', async (req, res) => {
 // Create post
 router.post('/', async (req, res) => {
   try {
-    const { content, media_url, media_type, user_id, post_type } = req.body;
+    const { content, media_url, media_type, user_id, post_type, post_scope } = req.body;
     const result = await pool.query(
-      `INSERT INTO posts (user_id, content, media_url, media_type, post_type)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO posts (user_id, content, media_url, media_type, post_type, post_scope)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [user_id, content, media_url, media_type, post_type || 'post']
+      [user_id, content, media_url, media_type, post_type || 'post', post_scope || 'feed']
     );
-    res.status(201).json(result.rows[0]);
+    
+    // Return full post with user info
+    const post = await pool.query(
+      `SELECT p.*, u.full_name, u.preferred_name, u.department, u.profile_pic
+       FROM posts p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.id = $1`,
+      [result.rows[0].id]
+    );
+    
+    res.status(201).json(post.rows[0]);
   } catch (err) {
     console.error('Create post error:', err);
     res.status(500).json({ error: 'Server error' });

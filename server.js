@@ -52,6 +52,18 @@ const initDB = async () => {
         year VARCHAR(10),
         cover_photo TEXT,
         profile_pic TEXT,
+        cover_position_x VARCHAR(10) DEFAULT '50',
+        cover_position_y VARCHAR(10) DEFAULT '50',
+        cover_zoom VARCHAR(10) DEFAULT '1',
+        profile_position_x VARCHAR(10) DEFAULT '50',
+        profile_position_y VARCHAR(10) DEFAULT '50',
+        profile_zoom VARCHAR(10) DEFAULT '1',
+        dark_mode VARCHAR(10) DEFAULT 'true',
+        tiktok TEXT,
+        instagram TEXT,
+        facebook TEXT,
+        youtube TEXT,
+        linkedin TEXT,
         verification_token VARCHAR(255),
         verified BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -65,6 +77,7 @@ const initDB = async () => {
         media_url TEXT,
         media_type VARCHAR(50),
         post_type VARCHAR(50) DEFAULT 'post',
+        post_scope VARCHAR(50) DEFAULT 'feed',
         likes_count INTEGER DEFAULT 0,
         comments_count INTEGER DEFAULT 0,
         reposts_count INTEGER DEFAULT 0,
@@ -164,6 +177,41 @@ const initDB = async () => {
         UNIQUE(community_id, user_id)
       );
     `);
+
+    // Add dark_mode column if it doesn't exist (for existing databases)
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dark_mode VARCHAR(10) DEFAULT 'true'`);
+    } catch (err) {
+      // Column might already exist
+    }
+
+    // Add post_scope column if it doesn't exist
+    try {
+      await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_scope VARCHAR(50) DEFAULT 'feed'`);
+    } catch (err) {
+      // Column might already exist
+    }
+
+    // Add cover/profile position columns if they don't exist
+    const positionColumns = ['cover_position_x', 'cover_position_y', 'cover_zoom', 'profile_position_x', 'profile_position_y', 'profile_zoom'];
+    for (const col of positionColumns) {
+      try {
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} VARCHAR(10) DEFAULT '50'`);
+      } catch (err) {
+        // Column might already exist
+      }
+    }
+
+    // Add social link columns if they don't exist
+    const socialColumns = ['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin'];
+    for (const col of socialColumns) {
+      try {
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} TEXT`);
+      } catch (err) {
+        // Column might already exist
+      }
+    }
+
     console.log('Database tables initialized');
   } catch (err) {
     console.error('DB init error:', err.message);
@@ -198,7 +246,25 @@ app.use('/api/badges', badgesRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/projects', projectsRoutes);
 
-// Add messages REST endpoint for fetching chat history
+// Dark mode endpoint
+app.put('/api/users/:id/dark-mode', async (req, res) => {
+  try {
+    const { dark_mode } = req.body;
+    const result = await pool.query(
+      'UPDATE users SET dark_mode = $1, updated_at = NOW() WHERE id = $2 RETURNING id, dark_mode',
+      [dark_mode, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Dark mode update error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Messages endpoints
 app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
   try {
     const result = await pool.query(
