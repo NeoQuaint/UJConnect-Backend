@@ -176,40 +176,28 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(community_id, user_id)
       );
+
+      CREATE TABLE IF NOT EXISTS gallery (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        media_url TEXT,
+        media_type VARCHAR(50) DEFAULT 'image',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
     `);
 
-    // Add dark_mode column if it doesn't exist (for existing databases)
-    try {
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dark_mode VARCHAR(10) DEFAULT 'true'`);
-    } catch (err) {
-      // Column might already exist
-    }
-
-    // Add post_scope column if it doesn't exist
-    try {
-      await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_scope VARCHAR(50) DEFAULT 'feed'`);
-    } catch (err) {
-      // Column might already exist
-    }
-
-    // Add cover/profile position columns if they don't exist
+    // Add missing columns for existing databases
+    try { await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dark_mode VARCHAR(10) DEFAULT 'true'`); } catch (err) {}
+    try { await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_scope VARCHAR(50) DEFAULT 'feed'`); } catch (err) {}
+    
     const positionColumns = ['cover_position_x', 'cover_position_y', 'cover_zoom', 'profile_position_x', 'profile_position_y', 'profile_zoom'];
     for (const col of positionColumns) {
-      try {
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} VARCHAR(10) DEFAULT '50'`);
-      } catch (err) {
-        // Column might already exist
-      }
+      try { await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} VARCHAR(10) DEFAULT '50'`); } catch (err) {}
     }
 
-    // Add social link columns if they don't exist
     const socialColumns = ['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin'];
     for (const col of socialColumns) {
-      try {
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} TEXT`);
-      } catch (err) {
-        // Column might already exist
-      }
+      try { await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} TEXT`); } catch (err) {}
     }
 
     console.log('Database tables initialized');
@@ -224,6 +212,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Routes
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
@@ -234,6 +223,7 @@ const searchRoutes = require('./routes/search');
 const highlightsRoutes = require('./routes/highlights');
 const badgesRoutes = require('./routes/badges');
 const projectsRoutes = require('./routes/projects');
+const galleryRoutes = require('./routes/gallery');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
@@ -245,6 +235,7 @@ app.use('/api/highlights', highlightsRoutes);
 app.use('/api/badges', badgesRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/projects', projectsRoutes);
+app.use('/api/gallery', galleryRoutes);
 
 // Dark mode endpoint
 app.put('/api/users/:id/dark-mode', async (req, res) => {
