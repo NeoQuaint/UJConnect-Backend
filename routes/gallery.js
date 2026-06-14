@@ -20,15 +20,10 @@ router.get('/:userId', async (req, res) => {
   }
 });
 
-// Add to gallery
+// Add to gallery - UNLIMITED
 router.post('/', async (req, res) => {
   try {
     const { user_id, media_url, media_type } = req.body;
-    // Check count
-    const count = await pool.query('SELECT COUNT(*) FROM gallery WHERE user_id = $1', [user_id]);
-    if (parseInt(count.rows[0].count) >= 5) {
-      return res.status(400).json({ error: 'Maximum 5 items allowed' });
-    }
     const result = await pool.query(
       'INSERT INTO gallery (user_id, media_url, media_type) VALUES ($1, $2, $3) RETURNING *',
       [user_id, media_url, media_type || 'image']
