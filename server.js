@@ -177,9 +177,16 @@ const initDB = async () => {
         UNIQUE(community_id, user_id)
       );
 
-      CREATE TABLE IF NOT EXISTS gallery (
+      CREATE TABLE IF NOT EXISTS gallery_posts (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        caption TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS gallery_items (
+        id SERIAL PRIMARY KEY,
+        post_id INTEGER REFERENCES gallery_posts(id) ON DELETE CASCADE,
         media_url TEXT,
         media_type VARCHAR(50) DEFAULT 'image',
         created_at TIMESTAMP DEFAULT NOW()
@@ -269,6 +276,18 @@ app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
       [req.params.userId, req.params.otherUserId]
     );
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Cleanup broken posts (no content and no media)
+app.delete('/api/posts/cleanup/broken', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM posts WHERE (content IS NULL OR content = '' OR content = '0') AND (media_url IS NULL OR media_url = '') RETURNING id`
+    );
+    res.json({ deleted: result.rows.length, ids: result.rows.map(r => r.id) });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
