@@ -54,15 +54,21 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create post
+// Create post - REJECT blank posts
 router.post('/', async (req, res) => {
   try {
     const { content, media_url, media_type, user_id, post_type, post_scope } = req.body;
+    
+    // Reject posts with no content AND no media
+    if ((!content || content.trim() === '') && (!media_url || media_url.trim() === '')) {
+      return res.status(400).json({ error: 'Post must have content or media' });
+    }
+    
     const result = await pool.query(
       `INSERT INTO posts (user_id, content, media_url, media_type, post_type, post_scope)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [user_id, content, media_url, media_type, post_type || 'post', post_scope || 'feed']
+      [user_id, content || '', media_url || null, media_type || null, post_type || 'post', post_scope || 'feed']
     );
     
     const post = await pool.query(
@@ -80,27 +86,31 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Delete post - ONLY author can delete
+// Delete post - author OR broken post
 router.delete('/:id', async (req, res) => {
   try {
     const user = getUserFromToken(req);
-    if (!user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    // Get the post
-    const post = await pool.query('SELECT user_id FROM posts WHERE id = $1', [req.params.id]);
+    
+    const post = await pool.query('SELECT * FROM posts WHERE id = $1', [req.params.id]);
     if (post.rows.length === 0) {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    // Check if the user is the author
-    if (post.rows[0].user_id !== user.id) {
-      return res.status(403).json({ error: 'You can only delete your own posts' });
+    const postData = post.rows[0];
+    const isBroken = (!postData.content || postData.content.trim() === '' || postData.content === '0') && (!postData.media_url || postData.media_url.trim() === '');
+    
+    // Allow deletion if: user owns the post OR the post is broken
+    if (user && postData.user_id === user.id) {
+      await pool.query('DELETE FROM posts WHERE id = $1', [req.params.id]);
+      return res.json({ success: true });
+    }
+    
+    if (isBroken) {
+      await pool.query('DELETE FROM posts WHERE id = $1', [req.params.id]);
+      return res.json({ success: true, cleaned: true });
     }
 
-    await pool.query('DELETE FROM posts WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
+    return res.status(403).json({ error: 'You can only delete your own posts' });
   } catch (err) {
     console.error('Delete post error:', err);
     res.status(500).json({ error: 'Server error' });
