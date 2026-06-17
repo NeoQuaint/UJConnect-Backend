@@ -281,13 +281,25 @@ app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
   }
 });
 
-// Cleanup broken posts (no content and no media)
+// CLEANUP: Delete broken feed posts (no content and no media)
 app.delete('/api/posts/cleanup/broken', async (req, res) => {
   try {
     const result = await pool.query(
       `DELETE FROM posts WHERE (content IS NULL OR content = '' OR content = '0') AND (media_url IS NULL OR media_url = '') RETURNING id`
     );
     res.json({ deleted: result.rows.length, ids: result.rows.map(r => r.id) });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// CLEANUP: Delete empty gallery posts (no items)
+app.delete('/api/gallery/cleanup/empty', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM gallery_posts WHERE id NOT IN (SELECT DISTINCT post_id FROM gallery_items) RETURNING id`
+    );
+    res.json({ deleted: result.rows.length });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
