@@ -222,6 +222,29 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// CLEANUP endpoints - MUST be before gallery/posts routes
+app.get('/api/gallery/cleanup/empty', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM gallery_posts WHERE id NOT IN (SELECT DISTINCT post_id FROM gallery_items) RETURNING id`
+    );
+    res.json({ deleted: result.rows.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/posts/cleanup/broken', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM posts WHERE (content IS NULL OR content = '' OR content = '0') AND (media_url IS NULL OR media_url = '') RETURNING id`
+    );
+    res.json({ deleted: result.rows.length, ids: result.rows.map(r => r.id) });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Routes
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
@@ -279,30 +302,6 @@ app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
       [req.params.userId, req.params.otherUserId]
     );
     res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// CLEANUP: Broken feed posts - GET for easy browser access
-app.get('/api/posts/cleanup/broken', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `DELETE FROM posts WHERE (content IS NULL OR content = '' OR content = '0') AND (media_url IS NULL OR media_url = '') RETURNING id`
-    );
-    res.json({ deleted: result.rows.length, ids: result.rows.map(r => r.id) });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// CLEANUP: Empty gallery posts - GET for easy browser access
-app.get('/api/gallery/cleanup/empty', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `DELETE FROM gallery_posts WHERE id NOT IN (SELECT DISTINCT post_id FROM gallery_items) RETURNING id`
-    );
-    res.json({ deleted: result.rows.length });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
