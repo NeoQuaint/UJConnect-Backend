@@ -16,7 +16,11 @@ const io = new Server(server, {
   }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'https://uj-connect.com', 'https://www.uj-connect.com'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 const pool = new Pool({
@@ -193,7 +197,6 @@ const initDB = async () => {
       );
     `);
 
-    // Add missing columns for existing databases
     try { await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dark_mode VARCHAR(10) DEFAULT 'true'`); } catch (err) {}
     try { await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_scope VARCHAR(50) DEFAULT 'feed'`); } catch (err) {}
     
@@ -281,8 +284,8 @@ app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
   }
 });
 
-// CLEANUP: Delete broken feed posts (no content and no media)
-app.delete('/api/posts/cleanup/broken', async (req, res) => {
+// CLEANUP: Broken feed posts - GET for easy browser access
+app.get('/api/posts/cleanup/broken', async (req, res) => {
   try {
     const result = await pool.query(
       `DELETE FROM posts WHERE (content IS NULL OR content = '' OR content = '0') AND (media_url IS NULL OR media_url = '') RETURNING id`
@@ -293,8 +296,8 @@ app.delete('/api/posts/cleanup/broken', async (req, res) => {
   }
 });
 
-// CLEANUP: Delete empty gallery posts (no items)
-app.delete('/api/gallery/cleanup/empty', async (req, res) => {
+// CLEANUP: Empty gallery posts - GET for easy browser access
+app.get('/api/gallery/cleanup/empty', async (req, res) => {
   try {
     const result = await pool.query(
       `DELETE FROM gallery_posts WHERE id NOT IN (SELECT DISTINCT post_id FROM gallery_items) RETURNING id`
