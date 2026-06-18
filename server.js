@@ -68,6 +68,10 @@ const initDB = async () => {
         facebook TEXT,
         youtube TEXT,
         linkedin TEXT,
+        birthday DATE,
+        graduation_date DATE,
+        custom_date DATE,
+        custom_date_label VARCHAR(255),
         verification_token VARCHAR(255),
         verified BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -210,6 +214,12 @@ const initDB = async () => {
       try { await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} TEXT`); } catch (err) {}
     }
 
+    const dateColumns = ['birthday', 'graduation_date', 'custom_date'];
+    for (const col of dateColumns) {
+      try { await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} DATE`); } catch (err) {}
+    }
+    try { await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_date_label VARCHAR(255)`); } catch (err) {}
+
     console.log('Database tables initialized');
   } catch (err) {
     console.error('DB init error:', err.message);
@@ -222,24 +232,37 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// CLEANUP endpoints - MUST be before gallery/posts routes
+// CLEANUP endpoints
 app.get('/api/gallery/cleanup/empty', async (req, res) => {
   try {
-    const result = await pool.query(
-      `DELETE FROM gallery_posts WHERE id NOT IN (SELECT DISTINCT post_id FROM gallery_items) RETURNING id`
-    );
+    const result = await pool.query(`DELETE FROM gallery_posts WHERE id NOT IN (SELECT DISTINCT post_id FROM gallery_items) RETURNING id`);
     res.json({ deleted: result.rows.length });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/posts/cleanup/broken', async (req, res) => {
   try {
-    const result = await pool.query(
-      `DELETE FROM posts WHERE (content IS NULL OR content = '' OR content = '0') AND (media_url IS NULL OR media_url = '') RETURNING id`
-    );
+    const result = await pool.query(`DELETE FROM posts WHERE (content IS NULL OR content = '' OR content = '0') AND (media_url IS NULL OR media_url = '') RETURNING id`);
     res.json({ deleted: result.rows.length, ids: result.rows.map(r => r.id) });
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
+
+// Celebrations endpoint
+app.get('/api/users/celebrations', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const result = await pool.query(
+      `SELECT id, full_name, preferred_name, profile_pic, birthday, graduation_date, custom_date, custom_date_label,
+        CASE 
+          WHEN birthday = $1 THEN 'birthday'
+          WHEN graduation_date = $1 THEN 'graduation'
+          WHEN custom_date = $1 THEN 'custom'
+        END as celebration_type
+      FROM users 
+      WHERE birthday = $1 OR graduation_date = $1 OR custom_date = $1`,
+      [today]
+    );
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -278,9 +301,7 @@ app.put('/api/users/:id/dark-mode', async (req, res) => {
       'UPDATE users SET dark_mode = $1, updated_at = NOW() WHERE id = $2 RETURNING id, dark_mode',
       [dark_mode, req.params.id]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Dark mode update error:', err.message);
@@ -293,18 +314,13 @@ app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT m.*, u.full_name, u.preferred_name, u.profile_pic 
-       FROM messages m 
-       JOIN users u ON m.sender_id = u.id 
-       WHERE (m.sender_id = $1 AND m.receiver_id = $2) 
-          OR (m.sender_id = $2 AND m.receiver_id = $1) 
-       ORDER BY m.created_at ASC 
-       LIMIT 100`,
+       FROM messages m JOIN users u ON m.sender_id = u.id 
+       WHERE (m.sender_id = $1 AND m.receiver_id = $2) OR (m.sender_id = $2 AND m.receiver_id = $1) 
+       ORDER BY m.created_at ASC LIMIT 100`,
       [req.params.userId, req.params.otherUserId]
     );
     res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
 });
 
 // Online users tracking
@@ -328,34 +344,23 @@ io.on('connection', (socket) => {
       );
       const message = result.rows[0];
       const receiverSocketId = onlineUsers.get(String(receiver_id));
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('new_message', message);
-      }
+      if (receiverSocketId) io.to(receiverSocketId).emit('new_message', message);
       socket.emit('message_sent', message);
-    } catch (err) {
-      console.error('Message save error:', err);
-    }
+    } catch (err) { console.error('Message save error:', err); }
   });
 
   socket.on('typing', (data) => {
     const receiverSocketId = onlineUsers.get(String(data.receiver_id));
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('user_typing', { sender_id: data.sender_id });
-    }
+    if (receiverSocketId) io.to(receiverSocketId).emit('user_typing', { sender_id: data.sender_id });
   });
 
   socket.on('stop_typing', (data) => {
     const receiverSocketId = onlineUsers.get(String(data.receiver_id));
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('user_stop_typing', { sender_id: data.sender_id });
-    }
+    if (receiverSocketId) io.to(receiverSocketId).emit('user_stop_typing', { sender_id: data.sender_id });
   });
 
   socket.on('disconnect', () => {
-    if (socket.userId) {
-      onlineUsers.delete(socket.userId);
-      io.emit('online_users', Array.from(onlineUsers.keys()));
-    }
+    if (socket.userId) { onlineUsers.delete(socket.userId); io.emit('online_users', Array.from(onlineUsers.keys())); }
     console.log('User disconnected:', socket.id);
   });
 });
