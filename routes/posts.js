@@ -33,14 +33,14 @@ router.get('/', async (req, res) => {
         u.preferred_name, 
         u.department, 
         u.profile_pic,
-        COALESCE(u.is_anonymous, false) as is_anonymous,
-        COALESCE(u.anonymous_avatar, '/ORANGE.png') as anonymous_avatar,
+        COALESCE(p.is_anonymous, false) as is_anonymous,
+        COALESCE(p.anonymous_avatar, '/ORANGE.png') as anonymous_avatar,
         CASE 
-          WHEN COALESCE(u.is_anonymous, false) = true THEN 'User'
+          WHEN COALESCE(p.is_anonymous, false) = true THEN 'User'
           ELSE COALESCE(u.preferred_name, u.full_name, 'Student')
         END as display_name,
         CASE 
-          WHEN COALESCE(u.is_anonymous, false) = true THEN COALESCE(u.anonymous_avatar, '/ORANGE.png')
+          WHEN COALESCE(p.is_anonymous, false) = true THEN COALESCE(p.anonymous_avatar, '/ORANGE.png')
           ELSE u.profile_pic
         END as display_avatar
       FROM posts p
@@ -77,17 +77,26 @@ router.get('/', async (req, res) => {
 // Create post
 router.post('/', async (req, res) => {
   try {
-    const { content, media_url, media_type, user_id, post_type, post_scope } = req.body;
+    const { content, media_url, media_type, user_id, post_type, post_scope, is_anonymous, anonymous_avatar } = req.body;
     
     if ((!content || content.trim() === '') && (!media_url || media_url.trim() === '')) {
       return res.status(400).json({ error: 'Post must have content or media' });
     }
     
+    // Get user's anonymous status at the time of posting
+    const userResult = await pool.query('SELECT is_anonymous, anonymous_avatar FROM users WHERE id = $1', [user_id]);
+    const userData = userResult.rows[0] || {};
+    
+    // Use the anonymous state from the request (captured at posting time) or fall back to DB
+    const postIsAnonymous = is_anonymous !== undefined ? is_anonymous : (userData.is_anonymous || false);
+    const postAnonymousAvatar = anonymous_avatar || userData.anonymous_avatar || '/ORANGE.png';
+    
     const result = await pool.query(
-      `INSERT INTO posts (user_id, content, media_url, media_type, post_type, post_scope)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO posts (user_id, content, media_url, media_type, post_type, post_scope, is_anonymous, anonymous_avatar)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [user_id, content || '', media_url || null, media_type || null, post_type || 'post', post_scope || 'feed']
+      [user_id, content || '', media_url || null, media_type || null, post_type || 'post', post_scope || 'feed', 
+       postIsAnonymous, postAnonymousAvatar]
     );
     
     const post = await pool.query(
@@ -97,14 +106,14 @@ router.post('/', async (req, res) => {
         u.preferred_name, 
         u.department, 
         u.profile_pic,
-        COALESCE(u.is_anonymous, false) as is_anonymous,
-        COALESCE(u.anonymous_avatar, '/ORANGE.png') as anonymous_avatar,
+        COALESCE(p.is_anonymous, false) as is_anonymous,
+        COALESCE(p.anonymous_avatar, '/ORANGE.png') as anonymous_avatar,
         CASE 
-          WHEN COALESCE(u.is_anonymous, false) = true THEN 'User'
+          WHEN COALESCE(p.is_anonymous, false) = true THEN 'User'
           ELSE COALESCE(u.preferred_name, u.full_name, 'Student')
         END as display_name,
         CASE 
-          WHEN COALESCE(u.is_anonymous, false) = true THEN COALESCE(u.anonymous_avatar, '/ORANGE.png')
+          WHEN COALESCE(p.is_anonymous, false) = true THEN COALESCE(p.anonymous_avatar, '/ORANGE.png')
           ELSE u.profile_pic
         END as display_avatar
        FROM posts p
