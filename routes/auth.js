@@ -25,7 +25,12 @@ const transporter = nodemailer.createTransport({
 // REGISTER
 router.post('/register', async (req, res) => {
   try {
-    const { full_name, preferred_name, student_number, email, department, course, password } = req.body;
+    const { 
+      full_name, preferred_name, student_number, email, 
+      department, course, year, bio, skills,
+      profile_pic, anonymous_avatar,
+      password, is_anonymous 
+    } = req.body;
 
     const existingUser = await pool.query(
       'SELECT id FROM users WHERE email = $1 OR student_number = $2',
@@ -39,10 +44,22 @@ router.post('/register', async (req, res) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
     const result = await pool.query(
-      `INSERT INTO users (full_name, preferred_name, student_number, email, department, course, password, verification_token, verified, dark_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, 'true')
-       RETURNING id, full_name, preferred_name, student_number, email, department, course, verified, dark_mode, created_at`,
-      [full_name, preferred_name || null, student_number, email, department, course || null, hashedPassword, verificationToken]
+      `INSERT INTO users (
+        full_name, preferred_name, student_number, email, 
+        department, course, year, bio, skills, 
+        profile_pic, anonymous_avatar, is_anonymous,
+        password, verification_token, verified, dark_mode
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, FALSE, 'true')
+      RETURNING id, full_name, preferred_name, student_number, email, 
+      department, course, year, bio, skills, 
+      profile_pic, anonymous_avatar, is_anonymous, verified, dark_mode, created_at`,
+      [
+        full_name, preferred_name || null, student_number, email,
+        department, course || null, year || null, bio || null, skills || [],
+        profile_pic || null, anonymous_avatar || null, is_anonymous || false,
+        hashedPassword, verificationToken
+      ]
     );
 
     const user = result.rows[0];
