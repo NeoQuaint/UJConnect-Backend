@@ -105,6 +105,21 @@ router.put('/:id', async (req, res) => {
       tiktok, instagram, facebook, youtube, linkedin 
     } = req.body;
     
+    // PROTECT REAL IDENTITY: If full_name is "User", don't overwrite the real name
+    // Get current user data first
+    const currentUser = await pool.query('SELECT full_name, preferred_name FROM users WHERE id = $1', [req.params.id]);
+    
+    if (currentUser.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const existingName = currentUser.rows[0].full_name;
+    const existingPreferred = currentUser.rows[0].preferred_name;
+    
+    // If the incoming full_name is "User" and the existing name is something real, keep the real name
+    const finalFullName = (full_name === 'User' && existingName !== 'User') ? existingName : full_name;
+    const finalPreferredName = (preferred_name === 'User' && existingPreferred !== 'User') ? existingPreferred : preferred_name;
+    
     const result = await pool.query(
       `UPDATE users 
        SET full_name = $1, preferred_name = $2, department = $3, course = $4, 
@@ -124,7 +139,7 @@ router.put('/:id', async (req, res) => {
        profile_position_x, profile_position_y, profile_zoom, 
        dark_mode, birthday, graduation_date, custom_date, custom_date_label,
        tiktok, instagram, facebook, youtube, linkedin, verified, created_at, updated_at`,
-      [full_name, preferred_name, department, course, bio, skills || [], year, 
+      [finalFullName, finalPreferredName, department, course, bio, skills || [], year, 
        cover_photo, profile_pic, anonymous_avatar, is_anonymous || false,
        cover_position_x, cover_position_y, cover_zoom, 
        profile_position_x, profile_position_y, profile_zoom, 
