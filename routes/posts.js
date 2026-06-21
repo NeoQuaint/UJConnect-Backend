@@ -62,14 +62,10 @@ router.get('/', async (req, res) => {
 
     query += ' ORDER BY p.created_at DESC LIMIT 50';
     
-    console.log('Query:', query);
-    console.log('Params:', params);
-    
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('Get posts error:', err.message);
-    console.error('Full error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
@@ -77,9 +73,12 @@ router.get('/', async (req, res) => {
 // Create post
 router.post('/', async (req, res) => {
   try {
-    const { content, media_url, media_type, user_id, post_type, post_scope, is_anonymous, anonymous_avatar } = req.body;
+    const { content, media_url, media_urls, media_type, user_id, post_type, post_scope, is_anonymous, anonymous_avatar } = req.body;
     
-    if ((!content || content.trim() === '') && (!media_url || media_url.trim() === '')) {
+    const hasContent = content && content.trim() !== '';
+    const hasMedia = (media_url && media_url.trim() !== '') || (media_urls && media_urls.trim() !== '');
+    
+    if (!hasContent && !hasMedia) {
       return res.status(400).json({ error: 'Post must have content or media' });
     }
     
@@ -91,11 +90,16 @@ router.post('/', async (req, res) => {
     const postIsAnonymous = is_anonymous !== undefined ? is_anonymous : (userData.is_anonymous || false);
     const postAnonymousAvatar = anonymous_avatar || userData.anonymous_avatar || '/ORANGE.png';
     
+    // Use media_urls if provided, otherwise fall back to single media_url
+    const finalMediaUrls = media_urls || (media_url ? JSON.stringify([{ url: media_url, type: media_type || 'image' }]) : null);
+    const finalMediaType = media_urls ? 'mixed' : (media_type || null);
+    const finalMediaUrl = media_urls ? null : (media_url || null); // Keep legacy field for backward compatibility
+    
     const result = await pool.query(
-      `INSERT INTO posts (user_id, content, media_url, media_type, post_type, post_scope, is_anonymous, anonymous_avatar)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO posts (user_id, content, media_url, media_urls, media_type, post_type, post_scope, is_anonymous, anonymous_avatar)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [user_id, content || '', media_url || null, media_type || null, post_type || 'post', post_scope || 'feed', 
+      [user_id, content || '', finalMediaUrl, finalMediaUrls, finalMediaType, post_type || 'post', post_scope || 'feed', 
        postIsAnonymous, postAnonymousAvatar]
     );
     
@@ -178,6 +182,47 @@ router.post('/:id/like', async (req, res) => {
     }
   } catch (err) {
     console.error('Like error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Comments
+router.get('/:id/comments', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.*, u.full_name, u.preferred_name, u.profile_pic,
+              COALESCE(c.is_anonymous, false) as is_anonymous,
+              CASE 
+                WHEN COALESCE(c.is_anonymous, false) = true THEN 'User'
+                ELSE COALESCE(u.preferred_name, u.full_name, 'Student')
+              END as display_name,
+              CASE 
+                WHEN COALESCE(c.is_anonymous, false) = true THEN '/ORANGE.png'
+                ELSE u.profile_pic
+              END as display_avatar
+       FROM comments c
+       JOIN users u ON c.user_id = u.id
+       WHERE c.post_id = $1
+       ORDER BY c.created_at ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get comments error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/:id/comments', async (req, res) => {
+  try {
+    const { user_id, content } = req.body;
+    const result = await pool.query(
+      'INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *',
+      [req.params.id, user_id, content]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Create comment error:', err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
