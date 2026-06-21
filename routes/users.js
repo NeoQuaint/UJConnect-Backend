@@ -93,59 +93,52 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Update profile
+// Update profile - DYNAMIC UPDATE (only updates fields that are sent)
 router.put('/:id', async (req, res) => {
   try {
-    const { 
-      full_name, preferred_name, department, course, bio, skills, year, 
-      cover_photo, profile_pic, anonymous_avatar, is_anonymous,
-      cover_position_x, cover_position_y, cover_zoom, 
-      profile_position_x, profile_position_y, profile_zoom, 
-      dark_mode, birthday, graduation_date, custom_date, custom_date_label,
-      tiktok, instagram, facebook, youtube, linkedin 
-    } = req.body;
+    // Build dynamic SET clause to only update fields that are provided
+    const fields = [];
+    const values = [];
+    let paramCount = 1;
     
-    // PROTECT REAL IDENTITY: If full_name is "User", don't overwrite the real name
-    // Get current user data first
-    const currentUser = await pool.query('SELECT full_name, preferred_name FROM users WHERE id = $1', [req.params.id]);
+    const fieldMap = {
+      full_name: 'full_name', preferred_name: 'preferred_name', department: 'department',
+      course: 'course', bio: 'bio', skills: 'skills', year: 'year',
+      cover_photo: 'cover_photo', profile_pic: 'profile_pic', 
+      anonymous_avatar: 'anonymous_avatar', is_anonymous: 'is_anonymous',
+      cover_position_x: 'cover_position_x', cover_position_y: 'cover_position_y',
+      cover_zoom: 'cover_zoom', profile_position_x: 'profile_position_x',
+      profile_position_y: 'profile_position_y', profile_zoom: 'profile_zoom',
+      dark_mode: 'dark_mode', birthday: 'birthday', graduation_date: 'graduation_date',
+      custom_date: 'custom_date', custom_date_label: 'custom_date_label',
+      tiktok: 'tiktok', instagram: 'instagram', facebook: 'facebook',
+      youtube: 'youtube', linkedin: 'linkedin'
+    };
     
-    if (currentUser.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    for (const [key, col] of Object.entries(fieldMap)) {
+      if (req.body[key] !== undefined) {
+        fields.push(`${col} = $${paramCount}`);
+        values.push(req.body[key]);
+        paramCount++;
+      }
     }
     
-    const existingName = currentUser.rows[0].full_name;
-    const existingPreferred = currentUser.rows[0].preferred_name;
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
     
-    // If the incoming full_name is "User" and the existing name is something real, keep the real name
-    const finalFullName = (full_name === 'User' && existingName !== 'User') ? existingName : full_name;
-    const finalPreferredName = (preferred_name === 'User' && existingPreferred !== 'User') ? existingPreferred : preferred_name;
+    fields.push('updated_at = NOW()');
+    values.push(req.params.id);
     
     const result = await pool.query(
-      `UPDATE users 
-       SET full_name = $1, preferred_name = $2, department = $3, course = $4, 
-           bio = $5, skills = $6, year = $7, 
-           cover_photo = $8, profile_pic = $9, anonymous_avatar = $10,
-           is_anonymous = $11,
-           cover_position_x = $12, cover_position_y = $13, cover_zoom = $14, 
-           profile_position_x = $15, profile_position_y = $16, profile_zoom = $17, 
-           dark_mode = $18, 
-           birthday = $19, graduation_date = $20, custom_date = $21, custom_date_label = $22,
-           tiktok = $23, instagram = $24, facebook = $25, youtube = $26, linkedin = $27, 
-           updated_at = NOW()
-       WHERE id = $28
+      `UPDATE users SET ${fields.join(', ')} WHERE id = $${paramCount}
        RETURNING id, full_name, preferred_name, student_number, email, department, course, bio, skills, year, 
        cover_photo, profile_pic, anonymous_avatar, is_anonymous,
        cover_position_x, cover_position_y, cover_zoom, 
        profile_position_x, profile_position_y, profile_zoom, 
        dark_mode, birthday, graduation_date, custom_date, custom_date_label,
        tiktok, instagram, facebook, youtube, linkedin, verified, created_at, updated_at`,
-      [finalFullName, finalPreferredName, department, course, bio, skills || [], year, 
-       cover_photo, profile_pic, anonymous_avatar, is_anonymous || false,
-       cover_position_x, cover_position_y, cover_zoom, 
-       profile_position_x, profile_position_y, profile_zoom, 
-       dark_mode, birthday, graduation_date, custom_date, custom_date_label,
-       tiktok, instagram, facebook, youtube, linkedin, 
-       req.params.id]
+      values
     );
     
     if (result.rows.length === 0) {
